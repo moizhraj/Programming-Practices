@@ -28,7 +28,7 @@ or by using Visual Studio's built in templates (Go to File > New > Project > .NE
 
 The idea here is to not create a unique correlation id, as the API will be consumed by another application but to reuse a provided correlation id. The best place to fetch this unique identifier is from the request headers. As this is a custom header, we will have to expose this to get away with the CORS issue of blocked headers for the consumers of our API. This can be done in Startup class. 
 
-```
+```C#
 services.AddCors(options => {
     options.AddPolicy("AllowAll",
         builder =>
@@ -46,7 +46,7 @@ The above code will expose the headers that we want i.e. "x-correlation-id" (thi
 
 Although, we are supporting to accept this header, we still need to verify if the correlation id header is present in a request and if not, we add it. This is helpful, when the API is consumed by third party and we still need to correlate any request in our system. To do so, we will use the built in owin middleware (no need to create a custom one as nothing fancy here) inside the Startup class > Configure(IApplicatinoBuilder app, IHostingEnvironment env) method.
 
-```
+```C#
 app.Use(async (context, next) =>
 {
     // add a correlationId if doesn't exist which can be reused in next handle
@@ -59,19 +59,19 @@ app.Use(async (context, next) =>
 
 The next step is to include logging of all the events and exceptions in our API. We are using Microsoft.ApplicationInsights.AspNetCore (v2.6.1) NuGet package. In the Startup class we register the App Insights telemetry
 
-```
+```C#
 services.AddApplicationInsightsTelemetry(Configuration);
 ```
 
 And we have created a logging service, where we use TelemetryClient from the above installed NuGet package to log events, exceptions, traces, dependencies, etc. This service is AiLogger that implements ILogger. In this service, you will notice some dependency over IHttpContextAccessor and ApplicationSettings. The IHttpContextAccessor is helpful in getting the request from the current HttpContext to fetch the correlation id provided. The call to fetch it is pretty simple 
 
-```
+```C#
 httpContextAccessor.HttpContext.Request.Headers["x-correlation-id"]
 ```
 
 The methods/functions in this logger service will then fetch the correlation id whenever required using the IHttpContextAccessor. We created a getter propety in the logger service to fetch correlation id from request header and using the property in any of the methods/functions.
 
-```
+```C#
 public void LogEvent(string eventName)
 {
     var customProperties = new Dictionary<string, string> {
@@ -91,17 +91,22 @@ public void LogException(Exception ex)
 
 Once we have the logger in place, its simple to inject this logger in any of your calling code, controller, etc. and start logging events, exceptions, etc.
 
-
 ## Implementing correlation Id's in Angular
 The concept will remain same for any other application. 
 
-This is our entry application, from where we will call the API. Now that the API supports a correlation header, we but have to do one thing while calling the API, that is to append the provided correlation id header with each request. A simplest way of doing this is to write an HttpInterceptor (called interceptor from now on) available from Angular v4. 
+This is our entry application, from where we will call the API. Lets start by creating a new angular application 
+
+```
+ng new UI
+```
+
+Once the angular application is created using the default template, we will start by implementing the correlation id while calling the API. In this application we will create one dashboard component, one service that will call an one of the endpoint. Once the component and service is in place, we have to do one thing while calling the API, that is to append the provided correlation id header with each request. Note that this is a consumer for the API and is responsible for passing a new correlation Id for each request when making a request to API. A simplest way of doing this is to write an HttpInterceptor (called interceptor from now on) available from Angular v4. 
 
 To define interceptors in short, its one common place where you can modify, handle any request and its response. You can modify headers, add retry logics, delays, handle errors in one common place, instead of repeating it in every service, component.
 
 To start with, we create an interceptor like so
 
-```
+```TypeScript
 import { Injectable } from '@angular/core';
 import { HttpRequest, HttpHandler, HttpEvent, HttpInterceptor, HttpResponse, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
@@ -159,7 +164,7 @@ Notice that this class implements HttpInterceptor that has intercept method that
 
 Once the interceptor is in place, it requires to be registered. This can be done in your base module (app.module) in the providers section.
 
-```
+```TypeScript
 providers: [
     {
         provide: HTTP_INTERCEPTORS,
@@ -171,9 +176,11 @@ providers: [
 
 This is it. You have the correlation id in place for your angular application and have successfully implemented tracking of a request from your UI to API and back. This can be further extended if you have another component and by using the same logic of passing the correlation id from request to response. 
 
-**Further reading**
-[https://docs.microsoft.com/en-us/aspnet/core/security/cors?view=aspnetcore-2.2] dotnet core Enabling CORS
-[https://docs.microsoft.com/en-us/aspnet/core/fundamentals/owin?view=aspnetcore-2.2] dotnet core Owin middleware
-[https://github.com/Microsoft/ApplicationInsights-aspnetcore/wiki/Getting-Started-with-Application-Insights-for-ASP.NET-Core] Getting Started with Application Insights for ASP.NET Core
-[https://angular.io/api/common/http/HttpInterceptor] HttpInterceptor
-[https://www.npmjs.com/package/applicationinsights-js] Application Insights NPM (Angular)
+***
+
+#### Further reading
+* [dotnet core Enabling CORS](https://docs.microsoft.com/en-us/aspnet/core/security/cors?view=aspnetcore-2.2)
+* [ dotnet core Owin middleware](https://docs.microsoft.com/en-us/aspnet/core/fundamentals/owin?view=aspnetcore-2.2)
+* [Getting Started with Application Insights for ASP.NET Core](https://github.com/Microsoft/ApplicationInsights-aspnetcore/wiki/Getting-Started-with-Application-Insights-for-ASP.NET-Core)
+* [Angular HttpInterceptor](https://angular.io/api/common/http/HttpInterceptor)
+* [Application Insights NPM (Angular)](https://www.npmjs.com/package/applicationinsights-js)
