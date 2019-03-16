@@ -1,3 +1,5 @@
+![Build Status](https://dev.azure.com/moizmh/GitHub%20Builds/_apis/build/status/Best%20Practices/GitHub%20Builds%20Correlation-CI)
+
 # **Correlation**
 When you have a microservices architecture or when your application is divided into multiple components/systems where a single request hops from one to another, its important that you should be able to track each request throughout its lifecycle. To help in such a scenario, correlation Ids can be used to detect and troubleshoot errors creeping in middleware systems.
 
