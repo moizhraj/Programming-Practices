@@ -28,15 +28,7 @@ namespace BestPractices.Correlation.Controllers
         [HttpGet("{id}")]
         public ActionResult<string> Get(int id)
         {
-            try
-            {
-                throw new ArgumentException("Invalid Id provided");
-            }
-            catch(Exception ex)
-            {
-                logger.LogException(ex);
-            }
-            return "value";
+            throw new ArgumentException("Invalid Id provided");
         }
 
         // POST api/values

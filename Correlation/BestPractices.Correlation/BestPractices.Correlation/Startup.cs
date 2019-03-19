@@ -1,4 +1,6 @@
 ﻿using BestPractices.Correlation.Contracts;
+using BestPractices.Correlation.Extensions;
+using BestPractices.Correlation.helpers;
 using BestPractices.Correlation.Models;
 using BestPractices.Correlation.Services;
 using Microsoft.AspNetCore.Builder;
@@ -44,7 +46,7 @@ namespace BestPractices.Correlation
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public void Configure(IApplicationBuilder app, IHostingEnvironment env)
+        public void Configure(IApplicationBuilder app, IHostingEnvironment env, ILogger logger)
         {
             if (env.IsDevelopment())
             {
@@ -55,14 +57,16 @@ namespace BestPractices.Correlation
                 // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
                 app.UseHsts();
             }
-            app.Use(async (context, next) =>
-            {
-                // add a correlationId if doesn't exist which can be reused in next handle
-                if (!context.Request.Headers.ContainsKey("x-correlation-id"))
-                    context.Request.Headers.Add("x-correlation-id", System.Guid.NewGuid().ToString());
-                context.Response.Headers.Add("x-correlation-id", context.Request.Headers["x-correlation-id"]);
-                await next();
-            });
+            app.ConfigureExceptionHandler(logger);          // Use Exception Handler
+            //app.UseMiddleware<CustomHttpMiddleware>();    // Or use Custom Middle ware to log events and exceptions
+            //app.Use(async (context, next) =>              // or use in built middleware
+            //{
+            //    // add a correlationId if doesn't exist which can be reused in next handle
+            //    if (!context.Request.Headers.ContainsKey("x-correlation-id"))
+            //        context.Request.Headers.Add("x-correlation-id", System.Guid.NewGuid().ToString());
+            //    context.Response.Headers.Add("x-correlation-id", context.Request.Headers["x-correlation-id"]);
+            //    await next();
+            //});
             app.UseHttpsRedirection();
             app.UseMvc();
         }
