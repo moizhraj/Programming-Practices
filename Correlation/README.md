@@ -93,8 +93,101 @@ public void LogException(Exception ex)
 
 Once we have the logger in place, its simple to inject this logger in any of your calling code, controller, etc. and start logging events, exceptions, etc.
 
+#### Exception Handling at global level
+Exception handling can also be done at global level by using Custom middleware or by registering a Custom Exception Handler. 
+
+##### 1. Registering Custom Middleware
+To create a custom middleware to handle http request, responses and exceptions, we create a new class with an Invoke method. This class will have a dependency in RequestDelegate, which will allow us to pass the request from this handler to the next calling method. Below is the implementation 
+
+```C#
+public class CustomHttpMiddleware
+{
+    private readonly RequestDelegate next;
+    private readonly ILogger logger;
+
+    public CustomHttpMiddleware(RequestDelegate _next, ILogger _logger)
+    {
+        next = _next;
+        logger = _logger;
+    }
+
+    public async Task InvokeAsync(HttpContext context)
+    {
+        try
+        {
+            // add a correlationId if doesn't exist which can be reused in next handle
+            if (!context.Request.Headers.ContainsKey("x-correlation-id"))
+                context.Request.Headers.Add("x-correlation-id", System.Guid.NewGuid().ToString());
+            context.Response.Headers.Add("x-correlation-id", context.Request.Headers["x-correlation-id"]);
+
+            await next(context);
+        }
+        catch (Exception ex)
+        {
+            await HandleExceptionAsync(context, ex);
+        }
+    }
+
+    private Task HandleExceptionAsync(HttpContext context, Exception ex)
+    {
+        // Log the exception 
+        logger.LogException(ex);
+
+        // then, either handle the error 
+        //context.Response.ContentType = "application/json";
+        //context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+        //return context.Response.WriteAsync($"{(int)HttpStatusCode.InternalServerError} - Internal Server Error");
+
+        // or just throw it to the calling method
+        throw ex;
+    }
+}
+```
+
+Once this is created, we go to our Startup class and register this middleware inside Configure method
+
+```C#
+app.UseMiddleware<CustomHttpMiddleware>();
+```
+
+This way each request will first come to your middlware before going to the API action method.
+
+##### 2. Registering Exception Handler
+Another way to handle exceptions at global level is to use exception handlers. We start by creating an extention method to IApplicationBuilder like so:
+
+```C#
+public static class ExceptionMiddlewareExtensions
+{
+    public static void ConfigureExceptionHandler(this IApplicationBuilder app, ILogger logger)
+    {
+        app.UseExceptionHandler(appError =>
+        {
+            appError.Run(async context => {
+                var contextFeature = context.Features.Get<IExceptionHandlerFeature>();
+                logger.LogException(contextFeature.Error);
+
+                // either throw the same exception to the calling method 
+                throw contextFeature.Error; 
+                // or construct a valid error response to return.
+                //await context.Response.WriteAsync("500 - Internal Server Error");
+            });
+        });
+    }
+}
+```
+
+and use this extension in Configure method in Startup class 
+
+```C#
+app.ConfigureExceptionHandler(logger);
+```
+
+This has a dependency on ILogger so, you will notice, the configure method is extended with ILogger parmeter which we use it pass it to this exception handler. 
+
+As the exceptions are either handled in custom middleware or global exception handler, we now dont need to add the try catch blocks in action methods. (repo is updated to use exception handler)
+
 ## Implementing correlation Id's in Angular
-The concept will remain same for any other application. 
+The concept will remain same for any other application.
 
 This is our entry application, from where we will call the API. Lets start by creating a new angular application 
 
@@ -177,6 +270,8 @@ providers: [
 ```
 
 This is it. You have the correlation id in place for your angular application and have successfully implemented tracking of a request from your UI to API and back. This can be further extended if you have another component and by using the same logic of passing the correlation id from request to response. 
+
+###### Note: If you are calling endpoints with different baseUrls that does not expose the header, it will throw you a CORS exception. You can filter those API's in the interceptor using the request object. We have also not handled validating the correlation id header in our API if its a valid GUID or not and needs to be checked as well. 
 
 ***
 
